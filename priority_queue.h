@@ -15,7 +15,7 @@ namespace my_stl{
     public:
         priority_queue() : c() {}
         priority_queue(InputIterator first, InputIterator last) : c(first, last) {
-            make_heap(c.begin(), c.end();
+            make_heap(c.begin(), c.end());
         }
         bool empty() const {
             return c.empty();
