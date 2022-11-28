@@ -195,7 +195,7 @@ namespace my_stl{
             return (link_type&) (x -> parent);
         }
         static reference value(base_ptr x) {
-            return x -> value_field;
+            return (link_type)x -> value_field;
         }
         static const Key& key(base_ptr x) {
             return KeyOfValue() (value(x));
@@ -203,6 +203,204 @@ namespace my_stl{
         static color_type& color(base_ptr x) {
             return (color_type&) (x -> color);
         }
+        static link_type minimum(link_type x){
+            return (link_type) _rb_tree_node_base::minimum(x);
+        }
+        static link_type maxmum(link_type x){
+            return (link_type) _rb_tree_node_base::maximum(x);
+        }
+    public:
+        typedef _rb_tree_iterator<value_type, reference, pointer> iterator;
+    private:
+        iterator _insert(base_ptr x, base_ptr y, const value_type& v);
+        iterator find(const Key_type& k);
+        link_type _copy(link_type x ,link_type p);
+        void _erase(link_type x);
+        void init(){
+            header = get_node();
+            color(header) = _rb_tree_red;
+            root() = 0;
+            leftmost() = header;
+            right_most() = header;
+        }
+    public:
+        rb_tree(const Compare& comp = Compare()): node_count(0),key_compare(comp){
+            init();
+        }
+        ~rb_tree(){
+            clear();
+            put_node(header);
+        }
+        rb_tree<Key, Value, KeyOfValue, Compare, Alloc>& operator = (const rb_tree<Key, Value, KeyOfValue, Compare, Alloc>& x);
+    public:
+        Compare key_comp() const {
+            return key_compare;
+        }
+        iterator begin(){
+            return leftmost();
+        }
+        iterator end(){
+            return right_most();
+        }
+        bool empty() const{
+            return node_count==0;
+        }
+        size_type size() const {
+            return node_count;
+        }
+        size_type max_size() const {
+            return size_type(-1);
+        }
+    public:
+        pair<iterator,bool> insert_unique(const value_type& v){
+            link_type y = header;
+            link_type x = root();
+            bool comp = true;
+            while(x!=0){
+                y=x;
+                comp = key_compare(KeyOfValue()(v), key(x));
+                x = comp? left(x): right(x);
+            }
+            iterator j = iterator(y);
+            if(comp){
+                if(j==begin()){
+                    return pair<iterator,bool>(_insert(x,y,v),true);
+                }else{
+                    --j;
+                }
+            }
+            if(key_compare(ke(j.node),KeyOfValue()(v))){
+                return pair<iterator,bool>(_insert(x,y,v),true);
+            }
+            return pair<iterator,bool>(j,false);
+        }
+        iterator insert_equal(const value_type& v){
+            link_type y = header;
+            link_type x = root();
+            while(x!=0){
+                y = x;
+                x = key_compare(KeyOfValue()(v), key(x))? left(x): right(x);
+            }
+            return _insert(x,y,v);
+
+        }
+        inline void _rb_tree_rotate_left(_rb_tree_node_base* x, _rb_tree_node_base*& root){
+            _rb_tree_node_base*y = x->right;
+            x->right = y->left;
+            if(y->left!=0)
+                y->left->parent = x;
+            y->parent = x->parent;
+            if(x==root)
+                root=y;
+            else if(x==x->parent->left)
+                x->parent->left = y;
+            else
+                x->parent->right = y;
+            y->left = x;
+            x->parent = y;
+        }
+        inline void _rb_tree_rotate_right(_rb_tree_node_base* x, _rb_tree_node_base*& root){
+            _rb_tree_node_base* y = x->left;
+            x->left = y->right;
+            if(y->right!=0)
+                y->right->parent = x;
+            y->parent = x->parent;
+            if(x==root)
+                root=y;
+            else if(x==x->parent->right)
+                x->parent->right = y;
+            else
+                x->parent->left = y;
+            y->right = x;
+            x->parent = y;
+
+        }
+
+        inline void _rb_tree_rebalance(_rb_tree_node_base* x, _rb_tree_node_base*& root) {
+            x->color = _rb_tree_red;
+            while (x != root && x->parent->color == _rb_tree_red) {
+                if (x->parent == x->parent->parent->left) {
+                    _rb_tree_node_base *y = x->parent->parent->right;
+                    if (y && y->color == _rb_tree_red) {
+                        x->parent->color = _rb_tree_black;
+                        y->color = _rb_tree_black;
+                        x->parent->parent->color = _rb_tree_red;
+                        x = x->parent->parent;
+                    } else {
+                        if (x == x->parent->right) {
+                            x = x->parent;
+                            _rb_tree_rotate_left(x, root);
+                        }
+                        x->parent->color = _rb_tree_black;
+                        x->parent->parent->color = _rb_tree_red;
+                        _rb_tree_rotate_right(x->parent->parent, root);
+                    }
+                }else{
+                    _rb_tree_node_base* y = x->parent->parent->left;
+                    if(y&&y->color==_rb_tree_red) {
+                        x->parent->color = _rb_tree_black;
+                        y->color = _rb_tree_black;
+                        x->parent->parent->color = _rb_tree_red;
+                        x = x->parent->parent;
+                    }else{
+                        if(x==x->parent->left){
+                            x=x->parent;
+                            _rb_tree_rotate_right(x, root);
+                        }
+                        x->parent->color=_rb_tree_black;
+                        x->parent->parent->color=_rb_tree_red;
+                        _rb_tree_rotate_left(x->parent->parent, root);
+                    }
+                }
+
+            }
+            root->color = _rb_tree_black;
+        }
     };
+    template<class Key, class Value, class KeyofValue, class Compare,class Alloc>
+    typename rb_tree<Key, Value, KeyofValue, Compare, Alloc>::iterator
+    rb_tree<Key, Value, KeyofValue, Compare, Alloc>::
+            _insert(base_ptr x_, base_ptr y_, const value_type &v) {
+        link_type x = (link_type) x_;
+        link_type y = (link_type) y_;
+        link_type z;
+        if(y==header||x!=0||key_compare(KeyofValue()(v),key(y))){
+            z = create_node(v);
+            left(y) = z;
+            if(y==header){
+                root() = z;
+                right_most() = z;
+            }else if(y==leftmost()){
+                leftmost() = z;
+            }
+        }else{
+            z = create_node(v);
+            right(y) = z;
+            if(y==right_most()){
+                right_most() = z;
+            }
+        }
+        parent(z) = y;
+        left(z) = 0;
+        right(z) = 0;
+        _rb_tree_rebalance(z,header->parent);
+        ++node_count;
+        return iterator(z);
+    }
+    template<class Key, class Value, class KeyofValue, class Compare,class Alloc>
+    typename rb_tree<Key, Value, KeyofValue, Compare, Alloc>::iterator
+            rb_tree<Key, Value, KeyofValue, Compare, Alloc>::find(const Key& k){
+                link_type y = header;
+                link_type x = root();
+                while(x!=0)
+                    if(!key_compare(key(x),k)){
+                        y=x;
+                        x= left(x);
+                    }else{
+                        x= right(x);
+                    }
+                iterator j = iterator(y);
+                return (j==end()||key_compare(k,key(j.node)))?end():j;
+            }
 }
 #endif //MY_STL_RB_TREE_H
